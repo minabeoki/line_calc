@@ -40,27 +40,41 @@ func traverse(tree ast.Expr) (rpn []ast.Node) {
 	return rpn
 }
 
-func expr(op string, x *big.Float, y *big.Float) *big.Float {
-	z := new(big.Float).SetPrec(precision)
+func operation1(op string, x *big.Float) (z *big.Float) {
 	switch op {
 	case "+":
-		z = z.Add(x, y)
+		z = x
 	case "-":
-		z = z.Sub(x, y)
+		z = x.Neg(x)
+	case "!":
+		// what is correct??
+		z = x
+	default:
+		z = x
+	}
+	return z
+}
+
+func operation2(op string, x *big.Float, y *big.Float) (z *big.Float) {
+	switch op {
+	case "+":
+		z = x.Add(x, y)
+	case "-":
+		z = x.Sub(x, y)
 	case "*":
-		z = z.Mul(x, y)
+		z = x.Mul(x, y)
 	case "/":
-		z = z.Quo(x, y)
+		z = x.Quo(x, y)
 	case "<<":
 		p, _ := x.Int(nil)
 		q, _ := y.Int64()
 		r := p.Lsh(p, uint(q))
-		z = z.SetInt(r)
+		z = x.SetInt(r)
 	case ">>":
 		p, _ := x.Int(nil)
 		q, _ := y.Int64()
 		r := p.Rsh(p, uint(q))
-		z = z.SetInt(r)
+		z = x.SetInt(r)
 	}
 	return z
 }
@@ -79,18 +93,13 @@ func calc(rpn []ast.Node) *big.Float {
 			y := stack[len(stack)-2]
 			stack = stack[:len(stack)-2]
 			op := node.(*ast.BinaryExpr).Op.String()
-			z := expr(op, x, y)
+			z := operation2(op, x, y)
 			stack = append(stack, z)
 		case *ast.UnaryExpr:
-			// sign
-			sign := node.(*ast.UnaryExpr)
-			switch sign.Op.String() {
-			case "-":
-				x := stack[len(stack)-1]
-				stack[len(stack)-1] = x.Neg(x)
-			case "!":
-				// what is correct??
-			}
+			x := stack[len(stack)-1]
+			op := node.(*ast.UnaryExpr).Op.String()
+			z := operation1(op, x)
+			stack[len(stack)-1] = z
 		case *ast.BasicLit:
 			lit := node.(*ast.BasicLit)
 			x := new(big.Float).SetPrec(precision)
@@ -135,7 +144,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer rl.Close()
+	defer func() { _ = rl.Close() }()
 
 	rl.Config.SetListener(keyListener)
 
