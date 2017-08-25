@@ -12,7 +12,10 @@ import (
 	"github.com/chzyer/readline"
 )
 
+const precision = 72
+
 func printAst(tree ast.Expr) {
+	fmt.Println()
 	depth := 0
 	ast.Inspect(tree, func(n ast.Node) bool {
 		indent := strings.Repeat("  ", depth)
@@ -24,6 +27,7 @@ func printAst(tree ast.Expr) {
 		}
 		return true
 	})
+	fmt.Println()
 }
 
 func traverse(tree ast.Expr) (rpn []ast.Node) {
@@ -37,7 +41,7 @@ func traverse(tree ast.Expr) (rpn []ast.Node) {
 }
 
 func expr(op string, x *big.Float, y *big.Float) *big.Float {
-	z := new(big.Float)
+	z := new(big.Float).SetPrec(precision)
 	switch op {
 	case "+":
 		z = z.Add(x, y)
@@ -48,7 +52,15 @@ func expr(op string, x *big.Float, y *big.Float) *big.Float {
 	case "/":
 		z = z.Quo(x, y)
 	case "<<":
+		p, _ := x.Int(nil)
+		q, _ := y.Int64()
+		r := p.Lsh(p, uint(q))
+		z = z.SetInt(r)
 	case ">>":
+		p, _ := x.Int(nil)
+		q, _ := y.Int64()
+		r := p.Rsh(p, uint(q))
+		z = z.SetInt(r)
 	}
 	return z
 }
@@ -69,9 +81,19 @@ func calc(rpn []ast.Node) *big.Float {
 			op := node.(*ast.BinaryExpr).Op.String()
 			z := expr(op, x, y)
 			stack = append(stack, z)
+		case *ast.UnaryExpr:
+			// sign
+			sign := node.(*ast.UnaryExpr)
+			switch sign.Op.String() {
+			case "-":
+				x := stack[len(stack)-1]
+				stack[len(stack)-1] = x.Neg(x)
+			case "!":
+				// what is correct??
+			}
 		case *ast.BasicLit:
 			lit := node.(*ast.BasicLit)
-			x := new(big.Float)
+			x := new(big.Float).SetPrec(precision)
 			fmt.Sscan(lit.Value, x)
 			stack = append(stack, x)
 		}
@@ -123,15 +145,17 @@ func main() {
 		if err != nil {
 			break
 		}
-		fmt.Println()
+		fmt.Println(escClear)
 	}
 }
 
 const (
-	escDown  = "\x1bD"
-	escUp    = "\x1bM"
+	escDown1 = "\x1bD"
+	escUp1   = "\x1bM"
 	escEnter = "\x1bE"
 	escKill  = "\x1b[K"
+	escClear = "\x1b[2K"
+	escUp    = "\x1b[%dA"
 	escLeft  = "\x1b[%dD"
 	escRight = "\x1b[%dC"
 )
@@ -140,14 +164,16 @@ var prev = ""
 
 func keyListener(line []rune, pos int, key rune) ([]rune, int, bool) {
 	if key == '\n' || key == '\r' || key == 0x04 {
+		prev = ""
 		return line, pos, true
 	}
 
 	ans, _ := answer(string(line))
 
 	if ans != prev {
-		fmt.Printf(escUp+escLeft+escKill, pos+2)
-		fmt.Printf("[ %s ]\n", ans)
+		fmt.Printf(escUp1+escLeft, pos+2)
+		fmt.Printf("[ %s ]", ans)
+		fmt.Println(escKill)
 		prev = ans
 	}
 
