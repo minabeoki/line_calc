@@ -48,14 +48,19 @@ func operation1(op string, x *big.Float) (z *big.Float) {
 		z = x.Neg(x)
 	case "!":
 		// what is correct??
-		z = x
+		p, _ := x.Int(nil)
+		r := p.Not(p)
+		z = x.SetInt(r)
 	default:
 		z = x
 	}
 	return z
 }
 
-func operation2(op string, x *big.Float, y *big.Float) (z *big.Float) {
+func operation2(op string, x, y *big.Float) (z *big.Float) {
+	p, _ := x.Int(nil)
+	q, _ := y.Int(nil)
+
 	switch op {
 	case "+":
 		z = x.Add(x, y)
@@ -65,17 +70,26 @@ func operation2(op string, x *big.Float, y *big.Float) (z *big.Float) {
 		z = x.Mul(x, y)
 	case "/":
 		z = x.Quo(x, y)
+	case "%":
+		r := p.Mod(p, q)
+		z = x.SetInt(r)
+	case "^":
+		r := p.Exp(p, q, nil)
+		z = x.SetInt(r)
 	case "<<":
-		p, _ := x.Int(nil)
-		q, _ := y.Int64()
-		r := p.Lsh(p, uint(q))
+		r := p.Lsh(p, uint(q.Int64()))
 		z = x.SetInt(r)
 	case ">>":
-		p, _ := x.Int(nil)
-		q, _ := y.Int64()
-		r := p.Rsh(p, uint(q))
+		r := p.Rsh(p, uint(q.Int64()))
+		z = x.SetInt(r)
+	case "&":
+		r := p.And(p, q)
+		z = x.SetInt(r)
+	case "|":
+		r := p.Or(p, q)
 		z = x.SetInt(r)
 	}
+
 	return z
 }
 
@@ -114,7 +128,22 @@ func calc(rpn []ast.Node) *big.Float {
 	return stack[0]
 }
 
+func preconv(line string) string {
+	replacer := strings.NewReplacer(
+		"k", "*1024",
+		"K", "*1024",
+		"m", "*1024*1024",
+		"M", "*1024*1024",
+		"g", "*1024*1024*1024",
+		"G", "*1024*1024*1024",
+		"~", "!",
+		"pi", "3.14159265358979323846264338327950",
+	)
+	return replacer.Replace(line)
+}
+
 func answer(line string) (string, error) {
+	line = preconv(line)
 	tree, err := parser.ParseExpr(line)
 	if err != nil {
 		return "", err
