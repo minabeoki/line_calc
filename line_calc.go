@@ -12,6 +12,7 @@ import (
 	"github.com/chzyer/readline"
 )
 
+const prompt = "> "
 const precision = 72
 
 func printAst(tree ast.Expr) {
@@ -169,7 +170,7 @@ func answer(line string) (string, error) {
 }
 
 func main() {
-	rl, err := readline.New("> ")
+	rl, err := readline.New(escBold + prompt + escNormal)
 	if err != nil {
 		panic(err)
 	}
@@ -177,45 +178,43 @@ func main() {
 
 	rl.Config.SetListener(keyListener)
 
-	fmt.Println()
 	for {
-		_, err := rl.Readline()
+		line, err := rl.Readline()
 		if err != nil {
 			break
 		}
-		fmt.Println(escClear)
+		ans, _ := answer(line)
+		fmt.Println("= " + ans)
 	}
 }
 
 const (
-	escDown1 = "\x1bD"
-	escUp1   = "\x1bM"
-	escEnter = "\x1bE"
-	escKill  = "\x1b[K"
-	escClear = "\x1b[2K"
-	escUp    = "\x1b[%dA"
-	escLeft  = "\x1b[%dD"
-	escRight = "\x1b[%dC"
+	escDown1  = "\x1bD"
+	escUp1    = "\x1bM"
+	escEnter  = "\x1bE"
+	escKill   = "\x1b[K"
+	escClear  = "\x1b[2K"
+	escUp     = "\x1b[%dA"
+	escLeft   = "\x1b[%dD"
+	escRight  = "\x1b[%dC"
+	escNormal = "\x1b[0m"
+	escBold   = "\x1b[1m"
 )
 
-var prev = ""
-
 func keyListener(line []rune, pos int, key rune) ([]rune, int, bool) {
-	if key == '\n' || key == '\r' || key == 0x04 {
-		prev = ""
-		return line, pos, true
+	switch key {
+	case '\n', '\r', 0x04, 0:
+		// do nothing
+	default:
+		ans, _ := answer(string(line))
+		out := escEnter + escKill
+		out += fmt.Sprintf("=> %s", ans)
+		out += escUp1 + escEnter + escUp1
+		out += fmt.Sprintf(escRight, len(prompt)+pos)
+		fmt.Print(out)
 	}
 
-	ans, _ := answer(string(line))
-
-	if ans != prev {
-		fmt.Printf(escUp1+escLeft, pos+2)
-		fmt.Printf("[ %s ]", ans)
-		fmt.Println(escKill)
-		prev = ans
-	}
-
-	return line, pos, true
+	return nil, 0, false
 }
 
 /// line_calc.go ends here
