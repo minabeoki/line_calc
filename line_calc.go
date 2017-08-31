@@ -176,6 +176,14 @@ func answer(line string) (string, error) {
 	if ans.IsInt() {
 		v, _ := ans.Int(nil)
 		s += v.Text(10)
+
+		z := new(big.Int)
+		z.SetUint64(0)
+		if v.Cmp(z) < 0 {
+			z.SetBit(z, 32, 1)
+			v = z.Add(z, v)
+		}
+
 		s += " 0x" + v.Text(16)
 		s += " 0b" + v.Text(2)
 	} else {
