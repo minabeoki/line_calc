@@ -159,23 +159,22 @@ func preconv(line string) string {
 	return s
 }
 
-func answer(line string) (string, error) {
+func answer(line string) (s []string, err error) {
 	line = preconv(line)
 	tree, err := parser.ParseExpr(line)
 	if err != nil {
-		return "", err
+		return s, err
 	}
 	//printAst(tree)
 	rpn := traverse(tree)
 	ans := calc(rpn)
 	if ans == nil {
-		return "", nil
+		return s, nil
 	}
 
-	s := ""
 	if ans.IsInt() {
 		v, _ := ans.Int(nil)
-		s += v.Text(10)
+		s = append(s, v.Text(10))
 
 		z := new(big.Int)
 		z.SetUint64(0)
@@ -184,10 +183,10 @@ func answer(line string) (string, error) {
 			v = z.Add(z, v)
 		}
 
-		s += " 0x" + v.Text(16)
-		s += " 0b" + v.Text(2)
+		s = append(s, "0x"+v.Text(16))
+		s = append(s, "0b"+v.Text(2))
 	} else {
-		s = fmt.Sprint(ans)
+		s = append(s, ans.Text('f', 10))
 	}
 
 	return s, nil
@@ -208,7 +207,7 @@ func main() {
 			break
 		}
 		ans, _ := answer(line)
-		fmt.Println(aprompt + ans)
+		printAns(ans)
 	}
 }
 
@@ -225,15 +224,41 @@ const (
 	escBold   = "\x1b[1m"
 )
 
+func printAns(ans []string) int {
+	if len(ans) == 0 {
+		return 0
+	}
+
+	n := 1
+	out := aprompt + ans[0]
+	if len(ans) >= 2 {
+		out += "  " + ans[1]
+	}
+	out += escKill + "\n"
+
+	if len(ans) >= 3 {
+		for i := 0; i < len(aprompt); i++ {
+			out += " "
+		}
+		out += ans[2]
+	}
+
+	n++
+	fmt.Println(out + escKill)
+
+	return n
+}
+
 func keyListener(line []rune, pos int, key rune) ([]rune, int, bool) {
 	switch key {
 	case '\n', '\r', 0x04, 0:
 		// do nothing
 	default:
 		ans, _ := answer(string(line))
-		out := escEnter + escKill
-		out += aprompt + ans
-		out += escUp1 + escEnter + escUp1
+
+		fmt.Print(escEnter)
+		n := printAns(ans)
+		out := fmt.Sprintf(escUp, n+1)
 		out += fmt.Sprintf(escRight, len(prompt)+pos)
 		fmt.Print(out)
 	}
