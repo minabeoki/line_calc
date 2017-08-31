@@ -16,8 +16,7 @@ import (
 const (
 	prompt    = "> "
 	aprompt   = "=> "
-	precision = 72
-	patNum    = `(0x[0-9a-fA-F]+|[0-9]+)`
+	precision = 128
 )
 
 func printAst(tree ast.Expr) {
@@ -137,10 +136,12 @@ func calc(rpn []ast.Node) *big.Float {
 func preconv(line string) string {
 	replacer := strings.NewReplacer(
 		"~", "!",
+		"**", "^",
 		"pi", "3.14159265358979323846264338327950",
 	)
 	s := replacer.Replace(line)
 
+	const patNum = `(0x[0-9a-fA-F]+|[0-9]+)`
 	units := [][]string{
 		{"K", "1024"},
 		{"M", "1024*1024"},
@@ -186,7 +187,8 @@ func answer(line string) (s []string, err error) {
 		s = append(s, "0x"+v.Text(16))
 		s = append(s, "0b"+v.Text(2))
 	} else {
-		s = append(s, ans.Text('f', 10))
+		//s = append(s, ans.Text('f', 16))
+		s = append(s, fmt.Sprint(ans))
 	}
 
 	return s, nil
