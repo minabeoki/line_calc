@@ -7,13 +7,18 @@ import (
 	"go/ast"
 	"go/parser"
 	"math/big"
+	"regexp"
 	"strings"
 
 	"github.com/chzyer/readline"
 )
 
-const prompt = "> "
-const precision = 72
+const (
+	prompt    = "> "
+	aprompt   = "=> "
+	precision = 72
+	patNum    = `(0x[0-9a-fA-F]+|[0-9]+)`
+)
 
 func printAst(tree ast.Expr) {
 	fmt.Println()
@@ -131,16 +136,27 @@ func calc(rpn []ast.Node) *big.Float {
 
 func preconv(line string) string {
 	replacer := strings.NewReplacer(
-		"k", "*1000",
-		"m", "*1000*1000",
-		"g", "*1000*1000*1000",
-		"K", "*1024",
-		"M", "*1024*1024",
-		"G", "*1024*1024*1024",
 		"~", "!",
 		"pi", "3.14159265358979323846264338327950",
 	)
-	return replacer.Replace(line)
+	s := replacer.Replace(line)
+
+	units := [][]string{
+		{"K", "1024"},
+		{"M", "1024*1024"},
+		{"G", "1024*1024*1024"},
+		{"T", "1024*1024*1024*1024"},
+		{"k", "1000"},
+		{"m", "1000*1000"},
+		{"g", "1000*1000*1000"},
+		{"t", "1000*1000*1000*1000"},
+	}
+	for _, u := range units {
+		r := regexp.MustCompile(patNum + u[0])
+		s = r.ReplaceAllString(s, "($1*"+u[1]+")")
+	}
+
+	return s
 }
 
 func answer(line string) (string, error) {
@@ -184,7 +200,7 @@ func main() {
 			break
 		}
 		ans, _ := answer(line)
-		fmt.Println("= " + ans)
+		fmt.Println(aprompt + ans)
 	}
 }
 
@@ -208,7 +224,7 @@ func keyListener(line []rune, pos int, key rune) ([]rune, int, bool) {
 	default:
 		ans, _ := answer(string(line))
 		out := escEnter + escKill
-		out += fmt.Sprintf("=> %s", ans)
+		out += aprompt + ans
 		out += escUp1 + escEnter + escUp1
 		out += fmt.Sprintf(escRight, len(prompt)+pos)
 		fmt.Print(out)
