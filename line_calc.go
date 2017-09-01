@@ -175,7 +175,7 @@ func answer(line string) (s []string, err error) {
 
 	if ans.IsInt() {
 		v, _ := ans.Int(nil)
-		s = append(s, v.Text(10))
+		s = append(s, separater(v.Text(10), ",", 3))
 
 		z := new(big.Int)
 		z.SetUint64(0)
@@ -184,14 +184,26 @@ func answer(line string) (s []string, err error) {
 			v = z.Add(z, v)
 		}
 
-		s = append(s, "0x"+v.Text(16))
-		s = append(s, "0b"+v.Text(2))
+		s = append(s, "0x"+separater(v.Text(16), "_", 4))
+		s = append(s, "0b"+separater(v.Text(2), "_", 8))
 	} else {
 		//s = append(s, ans.Text('f', 16))
 		s = append(s, fmt.Sprint(ans))
 	}
 
 	return s, nil
+}
+
+func separater(num string, sep string, n int) string {
+	r := ""
+	for i := 0; i < len(num); i++ {
+		c := string(num[len(num)-i-1])
+		if i > 0 && (i%n) == 0 {
+			c += sep
+		}
+		r = c + r
+	}
+	return r
 }
 
 func main() {
