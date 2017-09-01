@@ -207,7 +207,7 @@ func separater(num string, sep string, n int) string {
 	r := ""
 	for i := 0; i < len(num); i++ {
 		c := string(num[len(num)-i-1])
-		if i > 0 && (i%n) == 0 {
+		if i > 0 && (i%n) == 0 && c != "-" {
 			c += sep
 		}
 		r = c + r
