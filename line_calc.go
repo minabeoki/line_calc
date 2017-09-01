@@ -177,15 +177,24 @@ func answer(line string) (s []string, err error) {
 		v, _ := ans.Int(nil)
 		s = append(s, separater(v.Text(10), ",", 3))
 
+		minus := ""
 		z := new(big.Int)
 		z.SetUint64(0)
 		if v.Cmp(z) < 0 {
-			z.SetBit(z, 32, 1)
-			v = z.Add(z, v)
+			if v.BitLen() <= 32 {
+				z.SetBit(z, 32, 1)
+				v = z.Add(z, v)
+			} else if v.BitLen() <= 64 {
+				z.SetBit(z, 64, 1)
+				v = z.Add(z, v)
+			} else {
+				minus = "-"
+				v.Abs(v)
+			}
 		}
 
-		s = append(s, "0x"+separater(v.Text(16), "_", 4))
-		s = append(s, "0b"+separater(v.Text(2), "_", 8))
+		s = append(s, minus+"0x"+separater(v.Text(16), "_", 4))
+		s = append(s, minus+"0b"+separater(v.Text(2), "_", 8))
 	} else {
 		//s = append(s, ans.Text('f', 16))
 		s = append(s, fmt.Sprint(ans))
