@@ -3,9 +3,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"math"
 	"math/big"
 	"regexp"
 	"strings"
@@ -19,119 +21,7 @@ const (
 	precision = 128
 )
 
-func printAst(tree ast.Expr) {
-	fmt.Println()
-	depth := 0
-	ast.Inspect(tree, func(n ast.Node) bool {
-		indent := strings.Repeat("  ", depth)
-		if n != nil {
-			fmt.Printf("%s%[2]T %[2]v\n", indent, n)
-			depth++
-		} else {
-			depth--
-		}
-		return true
-	})
-	fmt.Println()
-}
-
-func traverse(tree ast.Expr) (rpn []ast.Node) {
-	ast.Inspect(tree, func(node ast.Node) bool {
-		if node != nil {
-			rpn = append(rpn, node)
-		}
-		return true
-	})
-	return rpn
-}
-
-func operation1(op string, x *big.Float) (z *big.Float) {
-	switch op {
-	case "+":
-		z = x
-	case "-":
-		z = x.Neg(x)
-	case "!":
-		// what is correct??
-		p, _ := x.Int(nil)
-		r := p.Not(p)
-		z = x.SetInt(r)
-	default:
-		z = x
-	}
-	return z
-}
-
-func operation2(op string, x, y *big.Float) (z *big.Float) {
-	p, _ := x.Int(nil)
-	q, _ := y.Int(nil)
-
-	switch op {
-	case "+":
-		z = x.Add(x, y)
-	case "-":
-		z = x.Sub(x, y)
-	case "*":
-		z = x.Mul(x, y)
-	case "/":
-		z = x.Quo(x, y)
-	case "%":
-		r := p.Mod(p, q)
-		z = x.SetInt(r)
-	case "^":
-		r := p.Exp(p, q, nil)
-		z = x.SetInt(r)
-	case "<<":
-		r := p.Lsh(p, uint(q.Int64()))
-		z = x.SetInt(r)
-	case ">>":
-		r := p.Rsh(p, uint(q.Int64()))
-		z = x.SetInt(r)
-	case "&":
-		r := p.And(p, q)
-		z = x.SetInt(r)
-	case "|":
-		r := p.Or(p, q)
-		z = x.SetInt(r)
-	}
-
-	return z
-}
-
-func calc(rpn []ast.Node) *big.Float {
-	var stack []*big.Float
-
-	for i := len(rpn) - 1; i >= 0; i-- {
-		node := rpn[i]
-		switch node.(type) {
-		case *ast.BinaryExpr:
-			if len(stack) < 2 {
-				return nil
-			}
-			x := stack[len(stack)-1]
-			y := stack[len(stack)-2]
-			stack = stack[:len(stack)-2]
-			op := node.(*ast.BinaryExpr).Op.String()
-			z := operation2(op, x, y)
-			stack = append(stack, z)
-		case *ast.UnaryExpr:
-			x := stack[len(stack)-1]
-			op := node.(*ast.UnaryExpr).Op.String()
-			z := operation1(op, x)
-			stack[len(stack)-1] = z
-		case *ast.BasicLit:
-			lit := node.(*ast.BasicLit)
-			x := new(big.Float).SetPrec(precision)
-			fmt.Sscan(lit.Value, x)
-			stack = append(stack, x)
-		}
-	}
-
-	if len(stack) == 0 {
-		return nil
-	}
-	return stack[0]
-}
+var tblIdent = map[string]*big.Float{}
 
 func preconv(line string) string {
 	replacer := strings.NewReplacer(
@@ -160,6 +50,154 @@ func preconv(line string) string {
 	return s
 }
 
+func operation1(op string, x *big.Float) (z *big.Float, err error) {
+	switch op {
+	case "+":
+		z = x
+	case "-":
+		z = x.Neg(x)
+	case "!":
+		p, _ := x.Int(nil)
+		z = x.SetInt(p.Not(p))
+	default:
+		err = errors.New("invalid unary")
+	}
+	return z, err
+}
+
+func operation2(op string, x, y *big.Float) (z *big.Float, err error) {
+	var r *big.Int
+	p, _ := x.Int(nil)
+	q, _ := y.Int(nil)
+
+	switch op {
+	case "+":
+		z = x.Add(x, y)
+	case "-":
+		z = x.Sub(x, y)
+	case "*":
+		z = x.Mul(x, y)
+	case "/":
+		z = x.Quo(x, y)
+	case "%":
+		r = p.Mod(p, q)
+	case "^":
+		r = p.Exp(p, q, nil)
+	case "<<":
+		r = p.Lsh(p, uint(q.Int64()))
+	case ">>":
+		r = p.Rsh(p, uint(q.Int64()))
+	case "&":
+		r = p.And(p, q)
+	case "|":
+		r = p.Or(p, q)
+	default:
+		err = errors.New("invalid op")
+	}
+
+	if r != nil {
+		z = x.SetInt(r)
+	}
+
+	return z, err
+}
+
+func evalExpr(expr ast.Expr) (*big.Float, error) {
+	switch e := expr.(type) {
+	case *ast.ParenExpr:
+		return evalExpr(e.X)
+	case *ast.BinaryExpr:
+		return evalBinaryExpr(e)
+	case *ast.UnaryExpr:
+		return evalUnaryExpr(e)
+	case *ast.BasicLit:
+		x, _, err := big.ParseFloat(e.Value, 10, precision, big.ToNearestEven)
+		return x, err
+	case *ast.Ident:
+		return evalIdent(e)
+	case *ast.CallExpr:
+		return evalCallExpr(e)
+	}
+
+	return nil, errors.New("invalid expr")
+}
+
+func evalBinaryExpr(expr *ast.BinaryExpr) (*big.Float, error) {
+	x, err := evalExpr(expr.X)
+	if err != nil {
+		return nil, err
+	}
+
+	y, err := evalExpr(expr.Y)
+	if err != nil {
+		return nil, err
+	}
+
+	return operation2(expr.Op.String(), x, y)
+}
+
+func evalUnaryExpr(expr *ast.UnaryExpr) (*big.Float, error) {
+	x, err := evalExpr(expr.X)
+	if err != nil {
+		return nil, err
+	}
+
+	return operation1(expr.Op.String(), x)
+}
+
+func evalIdent(expr *ast.Ident) (*big.Float, error) {
+	v, ok := tblIdent[expr.Name]
+	if !ok {
+		return nil, errors.New("unknown ident")
+	}
+	return v, nil
+}
+
+func evalCallExpr(expr *ast.CallExpr) (*big.Float, error) {
+	fn, ok := expr.Fun.(*ast.Ident)
+	if !ok {
+		return nil, errors.New("invalid call")
+	}
+
+	if len(expr.Args) == 0 {
+		return nil, errors.New("no args")
+	}
+	var args []float64
+	for _, e := range expr.Args {
+		v, err := evalExpr(e)
+		if err != nil {
+			return nil, err
+		}
+		a, _ := v.Float64()
+		args = append(args, a)
+	}
+
+	switch fn.Name {
+	case "sqrt":
+		x := big.NewFloat(math.Sqrt(args[0]))
+		x.SetPrec(precision)
+		return x, nil
+	}
+
+	return nil, errors.New("unknown call " + fn.Name)
+}
+
+func printAst(tree ast.Expr) {
+	fmt.Println()
+	depth := 0
+	ast.Inspect(tree, func(n ast.Node) bool {
+		indent := strings.Repeat("  ", depth)
+		if n != nil {
+			fmt.Printf("%s%[2]T %[2]v\n", indent, n)
+			depth++
+		} else {
+			depth--
+		}
+		return true
+	})
+	fmt.Println()
+}
+
 func answer(line string) (s []string, err error) {
 	line = preconv(line)
 	tree, err := parser.ParseExpr(line)
@@ -167,10 +205,9 @@ func answer(line string) (s []string, err error) {
 		return s, err
 	}
 	//printAst(tree)
-	rpn := traverse(tree)
-	ans := calc(rpn)
-	if ans == nil {
-		return s, nil
+	ans, err := evalExpr(tree)
+	if err != nil {
+		return s, err
 	}
 
 	if ans.IsInt() {
