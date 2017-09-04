@@ -23,6 +23,17 @@ const (
 
 var tblIdent = map[string]*big.Float{}
 
+var units = map[string]int64{
+	"K": 1024,
+	"M": 1024 * 1024,
+	"G": 1024 * 1024 * 1024,
+	"T": 1024 * 1024 * 1024 * 1024,
+	"k": 1000,
+	"m": 1000 * 1000,
+	"g": 1000 * 1000 * 1000,
+	"t": 1000 * 1000 * 1000 * 1000,
+}
+
 func preconv(line string) string {
 	replacer := strings.NewReplacer(
 		"~", "!",
@@ -31,21 +42,14 @@ func preconv(line string) string {
 	)
 	s := replacer.Replace(line)
 
-	const patNum = `(0x[0-9a-fA-F]+|[0-9]+)`
-	units := [][]string{
-		{"K", "1024"},
-		{"M", "1024*1024"},
-		{"G", "1024*1024*1024"},
-		{"T", "1024*1024*1024*1024"},
-		{"k", "1000"},
-		{"m", "1000*1000"},
-		{"g", "1000*1000*1000"},
-		{"t", "1000*1000*1000*1000"},
+	rs := `([`
+	for k := range units {
+		rs += k
 	}
-	for _, u := range units {
-		r := regexp.MustCompile(patNum + u[0])
-		s = r.ReplaceAllString(s, "($1*"+u[1]+")")
-	}
+	rs += `])`
+
+	re := regexp.MustCompile(rs)
+	s = re.ReplaceAllString(s, ".($1)")
 
 	return s
 }
@@ -117,6 +121,8 @@ func evalExpr(expr ast.Expr) (*big.Float, error) {
 		return evalIdent(e)
 	case *ast.CallExpr:
 		return evalCallExpr(e)
+	case *ast.TypeAssertExpr:
+		return evalUnit(e.X, e.Type)
 	}
 
 	return nil, errors.New("invalid expr")
@@ -154,32 +160,58 @@ func evalIdent(expr *ast.Ident) (*big.Float, error) {
 }
 
 func evalCallExpr(expr *ast.CallExpr) (*big.Float, error) {
-	fn, ok := expr.Fun.(*ast.Ident)
-	if !ok {
-		return nil, errors.New("invalid call")
-	}
-
 	if len(expr.Args) == 0 {
 		return nil, errors.New("no args")
 	}
-	var args []float64
-	for _, e := range expr.Args {
-		v, err := evalExpr(e)
-		if err != nil {
-			return nil, err
+
+	switch e := expr.Fun.(type) {
+	case *ast.Ident:
+		var args []float64
+		for _, e := range expr.Args {
+			v, err := evalExpr(e)
+			if err != nil {
+				return nil, err
+			}
+			a, _ := v.Float64()
+			args = append(args, a)
 		}
-		a, _ := v.Float64()
-		args = append(args, a)
+
+		switch e.Name {
+		case "sqrt":
+			x := big.NewFloat(math.Sqrt(args[0]))
+			x.SetPrec(precision)
+			return x, nil
+		}
+
+		return nil, errors.New("unknown call " + e.Name)
+
+	case *ast.BasicLit:
+		return evalUnit(e, expr.Args[0])
 	}
 
-	switch fn.Name {
-	case "sqrt":
-		x := big.NewFloat(math.Sqrt(args[0]))
-		x.SetPrec(precision)
-		return x, nil
+	return nil, errors.New("invalid call")
+}
+
+func evalUnit(expr, unit ast.Expr) (*big.Float, error) {
+	u, ok := unit.(*ast.Ident)
+	if !ok {
+		return nil, errors.New("invalid unit")
 	}
 
-	return nil, errors.New("unknown call " + fn.Name)
+	x, err := evalExpr(expr)
+	if err != nil {
+		return nil, err
+	}
+
+	v, ok := units[u.Name]
+	if !ok {
+		return x, errors.New("unknown unit")
+	}
+
+	z := new(big.Float).SetPrec(precision).SetInt64(v)
+	z = x.Mul(x, z)
+
+	return z, nil
 }
 
 func printAst(tree ast.Expr) {
