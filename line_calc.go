@@ -16,10 +16,13 @@ import (
 )
 
 const (
-	prompt    = "> "
-	aprompt   = "=> "
-	precision = 128
+	prompt      = "> "
+	aprompt     = "=> "
+	precision   = 128
+	showmaxbits = 300
 )
+
+var width int
 
 var tblIdent = map[string]*big.Float{}
 
@@ -42,12 +45,12 @@ func preconv(line string) string {
 	)
 	s := replacer.Replace(line)
 
+	// "1K" => "1.(K)"
 	rs := `([`
 	for k := range units {
 		rs += k
 	}
 	rs += `])`
-
 	re := regexp.MustCompile(rs)
 	s = re.ReplaceAllString(s, ".($1)")
 
@@ -242,8 +245,8 @@ func answer(line string) (s []string, err error) {
 		return s, err
 	}
 
-	if ans.IsInt() {
-		v, _ := ans.Int(nil)
+	v, _ := ans.Int(nil)
+	if ans.IsInt() && v.BitLen() <= showmaxbits {
 		s = append(s, separater(v.Text(10), ",", 3))
 
 		minus := ""
@@ -294,6 +297,7 @@ func main() {
 	rl.Config.SetListener(keyListener)
 
 	for {
+		width = rl.Config.FuncGetWidth()
 		line, err := rl.Readline()
 		if err != nil {
 			break
@@ -317,26 +321,29 @@ const (
 )
 
 func printAns(ans []string) int {
-	if len(ans) == 0 {
-		return 0
-	}
-
-	n := 1
-	out := aprompt + ans[0]
-	if len(ans) >= 2 {
-		out += "  " + ans[1]
-	}
-	out += escKill + "\n"
-
-	if len(ans) >= 3 {
-		for i := 0; i < len(aprompt); i++ {
-			out += " "
+	n := 0
+	out := ""
+	for i, a := range ans {
+		if i == 0 {
+			out += aprompt
+		} else {
+			for j := 0; j < len(aprompt); j++ {
+				out += " "
+			}
 		}
-		out += ans[2]
+
+		out += a
+		n += len(a) / width
+		if (len(a) % width) > 0 {
+			n++
+		}
+
+		out += escKill + "\n"
 	}
 
-	n++
-	fmt.Println(out + escKill)
+	if len(out) > 0 {
+		fmt.Print(out)
+	}
 
 	return n
 }
