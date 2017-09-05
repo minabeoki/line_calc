@@ -46,13 +46,13 @@ func preconv(line string) string {
 	s := replacer.Replace(line)
 
 	// "1K" => "1.(K)"
-	rs := `([`
+	rs := `([^g-zG-Z])([`
 	for k := range units {
 		rs += k
 	}
 	rs += `])`
 	re := regexp.MustCompile(rs)
-	s = re.ReplaceAllString(s, ".($1)")
+	s = re.ReplaceAllString(s, "$1.($2)")
 
 	return s
 }
@@ -118,7 +118,8 @@ func evalExpr(expr ast.Expr) (*big.Float, error) {
 	case *ast.UnaryExpr:
 		return evalUnaryExpr(e)
 	case *ast.BasicLit:
-		x, _, err := big.ParseFloat(e.Value, 10, precision, big.ToNearestEven)
+		x := new(big.Float).SetPrec(precision).SetMode(big.ToNearestEven)
+		_, err := fmt.Sscan(e.Value, x)
 		return x, err
 	case *ast.Ident:
 		return evalIdent(e)
@@ -235,10 +236,12 @@ func printAst(tree ast.Expr) {
 
 func answer(line string) (s []string, err error) {
 	line = preconv(line)
+
 	tree, err := parser.ParseExpr(line)
 	if err != nil {
 		return s, err
 	}
+
 	//printAst(tree)
 	ans, err := evalExpr(tree)
 	if err != nil {
@@ -302,8 +305,12 @@ func main() {
 		if err != nil {
 			break
 		}
-		ans, _ := answer(line)
-		printAns(ans)
+		ans, err := answer(line)
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			printAns(ans)
+		}
 	}
 }
 
@@ -321,31 +328,46 @@ const (
 )
 
 func printAns(ans []string) int {
-	n := 0
-	out := ""
+	spc := ""
+	for i := 0; i < len(aprompt); i++ {
+		spc += " "
+	}
+
+	lines := []string{}
 	for i, a := range ans {
+		var s string
 		if i == 0 {
-			out += aprompt
+			s = aprompt
 		} else {
-			for j := 0; j < len(aprompt); j++ {
-				out += " "
+			s = spc
+		}
+
+		lines = append(lines, s+a)
+	}
+
+	out := ""
+	num := 0
+	col := 0
+	for _, line := range lines {
+		if col+len(line) < width {
+			out += line
+			col += len(line)
+		} else {
+			out += escKill + "\n" + line
+			col = len(line)
+			num += col / width
+			if (col % width) > 0 {
+				num++
 			}
 		}
-
-		out += a
-		n += len(a) / width
-		if (len(a) % width) > 0 {
-			n++
-		}
-
-		out += escKill + "\n"
 	}
 
 	if len(out) > 0 {
-		fmt.Print(out)
+		num++
+		fmt.Println(out + escKill)
 	}
 
-	return n
+	return num
 }
 
 func keyListener(line []rune, pos int, key rune) ([]rune, int, bool) {
