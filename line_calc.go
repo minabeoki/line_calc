@@ -180,20 +180,32 @@ func evalCallExpr(expr *ast.CallExpr) (*big.Float, error) {
 			args = append(args, a)
 		}
 
-		switch e.Name {
-		case "sqrt":
-			x := big.NewFloat(math.Sqrt(args[0]))
-			x.SetPrec(precision)
-			return x, nil
-		}
-
-		return nil, errors.New("unknown call " + e.Name)
+		return evalFunc(e.Name, args)
 
 	case *ast.BasicLit:
 		return evalUnit(e, expr.Args[0])
 	}
 
 	return nil, errors.New("invalid call")
+}
+
+func evalFunc(fn string, args []float64) (*big.Float, error) {
+	z := new(big.Float).SetPrec(precision).SetMode(big.ToNearestEven)
+
+	switch fn {
+	case "sqrt":
+		z.SetFloat64(math.Sqrt(args[0]))
+	case "sin":
+		z.SetFloat64(math.Sin(args[0]))
+	case "cos":
+		z.SetFloat64(math.Cos(args[0]))
+	case "tan":
+		z.SetFloat64(math.Tan(args[0]))
+	default:
+		return nil, errors.New("unknown call " + fn)
+	}
+
+	return z, nil
 }
 
 func evalUnit(expr, unit ast.Expr) (*big.Float, error) {
