@@ -35,6 +35,8 @@ var units = map[string]int64{
 	"m": 1000 * 1000,
 	"g": 1000 * 1000 * 1000,
 	"t": 1000 * 1000 * 1000 * 1000,
+	"u": -1000 * 1000,
+	"n": -1000 * 1000 * 1000,
 }
 
 func preconv(line string) string {
@@ -46,11 +48,11 @@ func preconv(line string) string {
 	s := replacer.Replace(line)
 
 	// "1K" => "1.(K)"
-	rs := `([^g-zG-Z])([`
+	rs := `([)0-9a-fA-F ])(`
 	for k := range units {
-		rs += k
+		rs += k + `|`
 	}
-	rs += `])`
+	rs = rs[:len(rs)-1] + `)`
 	re := regexp.MustCompile(rs)
 	s = re.ReplaceAllString(s, "$1.($2)")
 
@@ -221,11 +223,17 @@ func evalUnit(expr, unit ast.Expr) (*big.Float, error) {
 
 	v, ok := units[u.Name]
 	if !ok {
-		return x, errors.New("unknown unit")
+		return x, errors.New("unknown unit " + u.Name)
 	}
 
-	z := new(big.Float).SetPrec(precision).SetInt64(v)
-	z = x.Mul(x, z)
+	z := new(big.Float).SetPrec(precision).SetMode(big.ToNearestEven)
+	if v >= 0 {
+		z.SetInt64(v)
+		z = x.Mul(x, z)
+	} else {
+		z.SetInt64(-v)
+		z = x.Quo(x, z)
+	}
 
 	return z, nil
 }
@@ -283,8 +291,8 @@ func answer(line string) (s []string, err error) {
 		s = append(s, minus+"0x"+separater(v.Text(16), "_", 4))
 		s = append(s, minus+"0b"+separater(v.Text(2), "_", 8))
 	} else {
-		//s = append(s, ans.Text('f', 16))
 		s = append(s, fmt.Sprint(ans))
+		//s = append(s, ans.Text('f', 16))
 	}
 
 	return s, nil
