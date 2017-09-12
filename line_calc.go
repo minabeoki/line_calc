@@ -357,7 +357,7 @@ func printAns(ans []string) int {
 	for i, a := range ans {
 		var s string
 		if i == 0 {
-			s = aprompt
+			s = escBold + aprompt + escNormal
 		} else {
 			s = spc
 		}
