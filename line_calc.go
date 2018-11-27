@@ -39,6 +39,8 @@ var units = map[string]int64{
 	"n": -1000 * 1000 * 1000,
 }
 
+var exprNest int
+
 func preconv(line string) string {
 	replacer := strings.NewReplacer(
 		"~", "!",
@@ -112,6 +114,11 @@ func operation2(op string, x, y *big.Float) (z *big.Float, err error) {
 }
 
 func evalExpr(expr ast.Expr) (*big.Float, error) {
+	exprNest += 1
+	if exprNest > 1000 {
+		return nil, errors.New("too nest expression")
+	}
+
 	switch e := expr.(type) {
 	case *ast.ParenExpr:
 		return evalExpr(e.X)
@@ -131,7 +138,7 @@ func evalExpr(expr ast.Expr) (*big.Float, error) {
 		return evalUnit(e.X, e.Type)
 	}
 
-	return nil, errors.New("invalid expr")
+	return nil, errors.New("invalid expression")
 }
 
 func evalBinaryExpr(expr *ast.BinaryExpr) (*big.Float, error) {
@@ -266,6 +273,7 @@ func answer(line string) (s []string, err error) {
 	}
 
 	//printAst(tree)
+	exprNest = 0
 	ans, err := evalExpr(tree)
 	if err != nil {
 		return s, err
@@ -322,17 +330,21 @@ func main() {
 
 	rl.Config.SetListener(keyListener)
 
+	prev := ""
 	for {
 		width = rl.Config.FuncGetWidth()
-		line, err := rl.Readline()
+		//line, err := rl.Readline()
+		line, err := rl.ReadlineWithDefault(prev)
 		if err != nil {
 			break
 		}
 		ans, err := answer(line)
 		if err != nil {
 			fmt.Println(err)
+			prev = ""
 		} else {
 			printAns(ans)
+			prev = strings.Replace(ans[0], ",", "", -1)
 		}
 	}
 }
