@@ -203,6 +203,8 @@ func evalFunc(fn string, args []float64) (*big.Float, error) {
 		z.SetFloat64(math.Cos(args[0]))
 	case "tan":
 		z.SetFloat64(math.Tan(args[0]))
+	case "f32":
+		z.SetFloat64(args[0])
 	default:
 		return nil, errors.New("unknown call " + fn)
 	}
