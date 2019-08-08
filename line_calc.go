@@ -39,6 +39,8 @@ var units = map[string]int64{
 	"n": -1000 * 1000 * 1000,
 }
 
+var exprNest int
+
 func preconv(line string) string {
 	replacer := strings.NewReplacer(
 		"~", "!",
@@ -112,6 +114,11 @@ func operation2(op string, x, y *big.Float) (z *big.Float, err error) {
 }
 
 func evalExpr(expr ast.Expr) (*big.Float, error) {
+	exprNest += 1
+	if exprNest > 1000 {
+		return nil, errors.New("too nest expression")
+	}
+
 	switch e := expr.(type) {
 	case *ast.ParenExpr:
 		return evalExpr(e.X)
@@ -131,7 +138,7 @@ func evalExpr(expr ast.Expr) (*big.Float, error) {
 		return evalUnit(e.X, e.Type)
 	}
 
-	return nil, errors.New("invalid expr")
+	return nil, errors.New("invalid expression")
 }
 
 func evalBinaryExpr(expr *ast.BinaryExpr) (*big.Float, error) {
@@ -204,7 +211,8 @@ func evalFunc(fn string, args []float64) (*big.Float, error) {
 	case "tan":
 		z.SetFloat64(math.Tan(args[0]))
 	case "f32":
-		z.SetFloat64(args[0])
+		f := math.Float32frombits(uint32(args[0]))
+		z.SetFloat64(float64(f))
 	default:
 		return nil, errors.New("unknown call " + fn)
 	}
@@ -265,6 +273,7 @@ func answer(line string) (s []string, err error) {
 	}
 
 	//printAst(tree)
+	exprNest = 0
 	ans, err := evalExpr(tree)
 	if err != nil {
 		return s, err
@@ -290,8 +299,8 @@ func answer(line string) (s []string, err error) {
 			}
 		}
 
-		s = append(s, minus+"0x"+separater(v.Text(16), "_", 4))
-		s = append(s, minus+"0b"+separater(v.Text(2), "_", 8))
+		s = append(s, minus+ans_hex(v))
+		s = append(s, minus+ans_bin(v))
 	} else {
 		s = append(s, fmt.Sprint(ans))
 		//s = append(s, ans.Text('f', 16))
@@ -312,6 +321,20 @@ func separater(num string, sep string, n int) string {
 	return r
 }
 
+func ans_hex(v *big.Int) string {
+	num := v.Text(16)
+	pre := (4 - (len(num) & 3)) & 3
+	num = strings.Repeat("0", pre) + num
+	return "0x" + separater(num, "_", 4)
+}
+
+func ans_bin(v *big.Int) string {
+	num := v.Text(2)
+	pre := (8 - (len(num) & 7)) & 7
+	num = strings.Repeat("0", pre) + num
+	return "0b" + separater(num, "_", 8)
+}
+
 func main() {
 	rl, err := readline.New(escBold + prompt + escNormal)
 	if err != nil {
@@ -321,17 +344,21 @@ func main() {
 
 	rl.Config.SetListener(keyListener)
 
+	prev := ""
 	for {
 		width = rl.Config.FuncGetWidth()
-		line, err := rl.Readline()
+		//line, err := rl.Readline()
+		line, err := rl.ReadlineWithDefault(prev)
 		if err != nil {
 			break
 		}
 		ans, err := answer(line)
 		if err != nil {
 			fmt.Println(err)
+			prev = ""
 		} else {
 			printAns(ans)
+			prev = strings.Replace(ans[0], ",", "", -1)
 		}
 	}
 }
