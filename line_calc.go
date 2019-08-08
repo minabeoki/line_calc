@@ -299,8 +299,8 @@ func answer(line string) (s []string, err error) {
 			}
 		}
 
-		s = append(s, minus+"0x"+separater(v.Text(16), "_", 4))
-		s = append(s, minus+"0b"+separater(v.Text(2), "_", 8))
+		s = append(s, minus+ans_hex(v))
+		s = append(s, minus+ans_bin(v))
 	} else {
 		s = append(s, fmt.Sprint(ans))
 		//s = append(s, ans.Text('f', 16))
@@ -319,6 +319,20 @@ func separater(num string, sep string, n int) string {
 		r = c + r
 	}
 	return r
+}
+
+func ans_hex(v *big.Int) string {
+	num := v.Text(16)
+	pre := (4 - (len(num) & 3)) & 3
+	num = strings.Repeat("0", pre) + num
+	return "0x" + separater(num, "_", 4)
+}
+
+func ans_bin(v *big.Int) string {
+	num := v.Text(2)
+	pre := (8 - (len(num) & 7)) & 7
+	num = strings.Repeat("0", pre) + num
+	return "0b" + separater(num, "_", 8)
 }
 
 func main() {
