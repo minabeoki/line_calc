@@ -93,7 +93,14 @@ func operation2(op string, x, y *big.Float) (z *big.Float, err error) {
 	case "%":
 		r = p.Mod(p, q)
 	case "^":
-		r = p.Exp(p, q, nil)
+		if x.IsInt() {
+			r = p.Exp(p, q, nil)
+		} else {
+			z = big.NewFloat(1)
+			for i := 0; i < int(q.Int64()); i++ {
+				z = z.Mul(x, z)
+			}
+		}
 	case "<<":
 		r = p.Lsh(p, uint(q.Int64()))
 	case ">>":
