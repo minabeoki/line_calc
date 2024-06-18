@@ -1,4 +1,4 @@
-module line_calc
+module lc
 
 go 1.22.4
 
