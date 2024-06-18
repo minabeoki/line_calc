@@ -354,11 +354,15 @@ func main() {
 	prev := ""
 	for {
 		width = rl.Config.FuncGetWidth()
-		//line, err := rl.Readline()
 		line, err := rl.ReadlineWithDefault(prev)
 		if err != nil {
 			break
 		}
+		line = strings.TrimSpace(line)
+		if line == "exit" || line == "quit" {
+			break
+		}
+
 		ans, err := answer(line)
 		if err != nil {
 			fmt.Println(err)
@@ -442,5 +446,3 @@ func keyListener(line []rune, pos int, key rune) ([]rune, int, bool) {
 
 	return nil, 0, false
 }
-
-/// line_calc.go ends here
